@@ -10,7 +10,7 @@ import sys
 # ================= CONFIGURATION =================
 ROUTER_IP = "192.168.1.1"
 COLLECTION_MINUTES = 20  # 20 minutes of aggressive collection
-WAIT_SECONDS = 2  # Only 2 seconds between rounds (not 10!)
+WAIT_SECONDS = 2  # Only 2 seconds between rounds
 DATA_FOLDER = "data\\raw"
 # =================================================
 
@@ -18,7 +18,7 @@ def create_folders():
     os.makedirs(DATA_FOLDER, exist_ok=True)
     print(f"[OK] Folder: {DATA_FOLDER}")
 
-def get_wifi_rssi_windows11():
+def get_wifi_rssi():
     try:
         cmd = ['netsh', 'wlan', 'show', 'interfaces']
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=5, shell=True)
@@ -31,7 +31,7 @@ def get_wifi_rssi_windows11():
     except:
         return -60
 
-def ping_windows(ip_address):
+def ping(ip_address):
     """Faster ping - only 3 pings instead of 5"""
     try:
         cmd = ['ping', '-n', '3', '-w', '1000', ip_address]  # 3 pings, 1 sec timeout
@@ -80,18 +80,7 @@ def collect_data():
     print(f"Wait time: {WAIT_SECONDS} seconds between rounds")
     print(f"Saving to: {output_file}")
     
-    print("\n" + "="*70)
-    print("CRITICAL INSTRUCTIONS - CREATE MAXIMUM INTERFERENCE:")
-    print("-"*70)
-    print("1. GO TO THE FARTHEST ROOM from your WiFi router")
-    print("2. START 4K YOUTUBE on another device")
-    print("3. START A LARGE DOWNLOAD on your computer")
-    print("4. CLOSE/OPEN your laptop lid to force WiFi reconnects")
-    print("5. WALK BACK AND FORTH between rooms continuously")
-    print("6. If possible, microwave food (causes interference)")
-    print("\nThe AI needs FAILURES - make the connection BAD!")
-    print("="*70)
-    
+   
     print("\nStarting in 5 seconds...")
     for i in range(5, 0, -1):
         print(f"  {i}...")
@@ -114,7 +103,7 @@ def collect_data():
             
             while time.time() < end_time:
                 round_counter += 1
-                current_rssi = get_wifi_rssi_windows11()
+                current_rssi = get_wifi_rssi()
                 current_time = datetime.now().isoformat()
                 
                 elapsed = time.time() - start_time
@@ -123,14 +112,14 @@ def collect_data():
                 seconds_left = int(remaining % 60)
                 
                 # Test Router
-                router_latency, router_loss, router_success = ping_windows(ROUTER_IP)
+                router_latency, router_loss, router_success = ping(ROUTER_IP)
                 writer.writerow([
                     current_time, 'router', router_latency, router_loss,
                     current_rssi, router_success, round_counter
                 ])
                 
                 # Test DNS
-                dns_latency, dns_loss, dns_success = ping_windows("8.8.8.8")
+                dns_latency, dns_loss, dns_success = ping("8.8.8.8")
                 writer.writerow([
                     current_time, 'dns', dns_latency, dns_loss,
                     current_rssi, dns_success, round_counter

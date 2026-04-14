@@ -137,10 +137,3 @@ prediction = model.predict(example_input)[0]
 print(f"Current state: Router loss=20%, DNS loss=10%, Latency=50ms")
 print(f"Predicted time to failure: {prediction:.1f} minutes")
 print(f"Status: {'CRITICAL' if prediction < 2 else 'WARNING' if prediction < 5 else 'HEALTHY'}")
-
-print("\n" + "="*70)
-print("NEXT STEPS")
-print("="*70)
-print("[OK] Model training complete!")
-print("-> Run 05_predict_live.py to test on new data")
-print("="*70)

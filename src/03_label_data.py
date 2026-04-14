@@ -9,7 +9,7 @@ print("="*70)
 print("DATA LABELING - Creating Time to Failure")
 print("="*70)
 
-# Find your aggressive data file
+# Find data file
 data_files = glob.glob('data\\raw\\network_data_aggressive_*.csv')
 if not data_files:
     data_files = glob.glob('data\\raw\\network_data_*.csv')
@@ -153,4 +153,3 @@ try:
 except:
     print("\n[NOTE] Install matplotlib for charts: python -m pip install matplotlib")
 
-print("="*70)
