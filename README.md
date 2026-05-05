@@ -32,22 +32,20 @@ DATA COLLECTION LAYER
 - RSSI (dBm)
 
 FEATURE ENGINEERING
- Raw values (latency, RSSI) 
- Rolling averages (window = 5 rounds) 
- Trend detection (rate of change)
+- Raw values (latency, RSSI) 
+- Rolling averages (window = 5 rounds) 
+- Trend detection (rate of change)
 
 XGBOOST REGRESSOR
-100 decision trees | Max depth: 4 │
- Learning rate: 0.1 
- Objective: MSE 
- 9 input features → 1 output (minutes to failure)
-
-
+- 100 decision trees | Max depth: 4 
+- Learning rate: 0.1 
+- Objective: MSE 
+- 9 input features → 1 output (minutes to failure)
 
 REAL-TIME INFERENCE │
- Predictions every 10 seconds │
- Critical alerts (<2 minutes) │
- Trend analysis (improving/declining) │
+- Predictions every 10 seconds │
+- Critical alerts (<2 minutes) │
+- Trend analysis (improving/declining) │
 
 
 ## 📊 Model Performance
