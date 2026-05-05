@@ -25,37 +25,29 @@ A **production-grade supervised machine learning system** that predicts network 
 - **Trend Analysis** - Rate of change detection for early warning
 
 ## 🏗️ System Architecture
-┌─────────────────────────────────────────────────────────────┐
-│ DATA COLLECTION LAYER │
-│ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ │
-│ │ Router Ping │ │ DNS Ping │ │ RSSI (dBm) │ │
-│ │ (ICMP) │ │ (8.8.8.8) │ │ (WiFi) │ │
-│ └──────────────┘ └──────────────┘ └──────────────┘ │
-└────────────────────────┬────────────────────────────────────┘
-│
-▼
-┌─────────────────────────────────────────────────────────────┐
-│ FEATURE ENGINEERING │
-│ • Raw values (latency, RSSI) │
-│ • Rolling averages (window = 5 rounds) │
-│ • Trend detection (rate of change) │
-└────────────────────────┬────────────────────────────────────┘
-│
-▼
-┌─────────────────────────────────────────────────────────────┐
-│ XGBOOST REGRESSOR │
-│ • 100 decision trees | Max depth: 4 │
-│ • Learning rate: 0.1 | Objective: MSE │
-│ • 9 input features → 1 output (minutes to failure) │
-└────────────────────────┬────────────────────────────────────┘
-│
-▼
-┌─────────────────────────────────────────────────────────────┐
-│ REAL-TIME INFERENCE │
-│ • Predictions every 10 seconds │
-│ • Critical alerts (<2 minutes) │
-│ • Trend analysis (improving/declining) │
-└─────────────────────────────────────────────────────────────┘
+
+DATA COLLECTION LAYER
+- router ping
+- DNS ping
+- RSSI (dBm)
+
+FEATURE ENGINEERING
+ Raw values (latency, RSSI) 
+ Rolling averages (window = 5 rounds) 
+ Trend detection (rate of change)
+
+XGBOOST REGRESSOR
+100 decision trees | Max depth: 4 │
+ Learning rate: 0.1 
+ Objective: MSE 
+ 9 input features → 1 output (minutes to failure)
+
+
+
+REAL-TIME INFERENCE │
+ Predictions every 10 seconds │
+ Critical alerts (<2 minutes) │
+ Trend analysis (improving/declining) │
 
 
 ## 📊 Model Performance
