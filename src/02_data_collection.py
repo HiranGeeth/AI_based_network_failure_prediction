@@ -1,175 +1,207 @@
-# 01_data_collection_fast.py - Aggressive collection for failure examples
+# 02_data_collection.py - Collect Router Ping, DNS Ping, and RSSI
 import time
-import csv
 import subprocess
 import re
+import pandas as pd
 from datetime import datetime
 import os
-import sys
+import platform
+
+print("="*70)
+print("DATA COLLECTION - Router Ping, DNS Ping, RSSI")
+print("="*70)
 
 # ================= CONFIGURATION =================
-ROUTER_IP = "192.168.1.1"
-COLLECTION_MINUTES = 20  # 20 minutes of aggressive collection
-WAIT_SECONDS = 2  # Only 2 seconds between rounds
-DATA_FOLDER = "data\\raw"
+ROUTER_IP = "10.34.15.254"  # Your university gateway
+DNS_IP = "8.8.8.8"
+COLLECTION_MINUTES = 20  # Change to 5 for quick test
+WAIT_SECONDS = 2  # Seconds between rounds
 # =================================================
 
-def create_folders():
-    os.makedirs(DATA_FOLDER, exist_ok=True)
-    print(f"[OK] Folder: {DATA_FOLDER}")
+# Create data folder
+DATA_FOLDER = "data"
+os.makedirs(DATA_FOLDER, exist_ok=True)
+
+# Generate filename with timestamp
+timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+output_file = os.path.join(DATA_FOLDER, f'network_data_{timestamp}.xlsx')
+
+print(f"\n[CONFIG] Router IP: {ROUTER_IP}")
+print(f"[CONFIG] DNS IP: {DNS_IP}")
+print(f"[CONFIG] Duration: {COLLECTION_MINUTES} minutes")
+print(f"[CONFIG] Interval: {WAIT_SECONDS} seconds between rounds")
+print(f"[CONFIG] Output: {output_file}")
+print("="*70)
 
 def get_wifi_rssi():
+    """Get WiFi RSSI in dBm from Windows"""
     try:
-        cmd = ['netsh', 'wlan', 'show', 'interfaces']
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5, shell=True)
-        match = re.search(r'Signal\s*:\s*(\d+)%', result.stdout)
-        if match:
-            signal_percent = int(match.group(1))
-            rssi_dbm = -90 + (signal_percent * 0.6)
-            return round(rssi_dbm, 1)
-        return -60
-    except:
-        return -60
-
-def ping(ip_address):
-    """Faster ping - only 3 pings instead of 5"""
-    try:
-        cmd = ['ping', '-n', '3', '-w', '1000', ip_address]  # 3 pings, 1 sec timeout
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5, shell=True)
+        result = subprocess.run(
+            ['netsh', 'wlan', 'show', 'interfaces'],
+            capture_output=True, text=True, shell=True
+        )
         output = result.stdout
         
-        latency = 9999
-        loss = 100
-        success = False
+        # Try to get dBm directly
+        rssi_match = re.search(r'Signal\s*:\s*(-\d+)\s*dBm', output)
+        if rssi_match:
+            return int(rssi_match.group(1))
         
-        loss_match = re.search(r'\((\d+)% loss\)', output)
-        if loss_match:
-            loss = int(loss_match.group(1))
-            success = loss < 50
+        # Fall back to percentage
+        perc_match = re.search(r'Signal\s*:\s*(\d+)%', output)
+        if perc_match:
+            percentage = int(perc_match.group(1))
+            # Convert to approximate dBm
+            return round(-100 + (percentage * 0.6), 1)
         
-        latency_match = re.search(r'Average = (\d+)ms', output)
-        if latency_match:
-            latency = float(latency_match.group(1))
-        
-        return latency, loss, success
-        
-    except:
-        return 9999, 100, False
-
-def create_artificial_load():
-    """Create network load to force failures"""
-    try:
-        # Start a background ping flood (gentle)
-        subprocess.Popen(['ping', '-n', '10', '-l', '1400', '8.8.8.8'], 
-                        stdout=subprocess.DEVNULL, 
-                        stderr=subprocess.DEVNULL)
-    except:
-        pass
-
-def collect_data():
-    print("="*70)
-    print("AGGRESSIVE DATA COLLECTOR - For Failure Examples")
-    print("="*70)
-    
-    create_folders()
-    
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    output_file = os.path.join(DATA_FOLDER, f'network_data_aggressive_{timestamp}.csv')
-    
-    print(f"Duration: {COLLECTION_MINUTES} minutes")
-    print(f"Wait time: {WAIT_SECONDS} seconds between rounds")
-    print(f"Saving to: {output_file}")
-    
-   
-    print("\nStarting in 5 seconds...")
-    for i in range(5, 0, -1):
-        print(f"  {i}...")
-        time.sleep(1)
-    
-    print("\n[RECORDING] Data collection ACTIVE\n")
-    
-    try:
-        with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow([
-                'timestamp', 'target', 'latency_ms', 'packet_loss_percent',
-                'rssi_dbm', 'success', 'round_id'
-            ])
-            
-            start_time = time.time()
-            end_time = start_time + (COLLECTION_MINUTES * 60)
-            round_counter = 0
-            failure_rounds = 0
-            
-            while time.time() < end_time:
-                round_counter += 1
-                current_rssi = get_wifi_rssi()
-                current_time = datetime.now().isoformat()
-                
-                elapsed = time.time() - start_time
-                remaining = (COLLECTION_MINUTES * 60) - elapsed
-                minutes_left = int(remaining // 60)
-                seconds_left = int(remaining % 60)
-                
-                # Test Router
-                router_latency, router_loss, router_success = ping(ROUTER_IP)
-                writer.writerow([
-                    current_time, 'router', router_latency, router_loss,
-                    current_rssi, router_success, round_counter
-                ])
-                
-                # Test DNS
-                dns_latency, dns_loss, dns_success = ping("8.8.8.8")
-                writer.writerow([
-                    current_time, 'dns', dns_latency, dns_loss,
-                    current_rssi, dns_success, round_counter
-                ])
-                
-                # Count failures for this round
-                round_failures = 0
-                if router_loss > 0 or dns_loss > 0:
-                    round_failures = 1
-                    failure_rounds += 1
-                
-                # Visual status
-                if router_loss == 0 and dns_loss == 0:
-                    status = "[OK]"
-                elif router_loss < 30 or dns_loss < 30:
-                    status = "[WARN]"
-                else:
-                    status = "[FAIL]"
-                
-                print(f"[ROUND {round_counter:3d}] {status} Router: {router_loss:2d}% loss/{router_latency:3.0f}ms | DNS: {dns_loss:2d}% loss/{dns_latency:3.0f}ms | Time: {minutes_left:2d}:{seconds_left:02d}")
-                
-                # Short wait (2-3 seconds)
-                time.sleep(WAIT_SECONDS)
-                
-                # Every 10 rounds, give a reminder
-                if round_counter % 10 == 0:
-                    print(f"  [TIP] Keep moving! Current failure rate: {failure_rounds}/{round_counter} ({failure_rounds*100//round_counter}%)")
-                    print(f"  {'-'*60}")
-            
-            print("\n" + "="*70)
-            print("[COMPLETE] Data collection finished!")
-            print(f"[STATS] Total rounds: {round_counter}")
-            print(f"[STATS] Rounds with failures: {failure_rounds} ({failure_rounds*100//round_counter}%)")
-            print(f"[FILE] {output_file}")
-            
-            if failure_rounds < round_counter * 0.3:
-                print("\n[WARNING] Low failure rate! Next time:")
-                print("  - Move to a DIFFERENT room")
-                print("  - Start a TORRENT download")
-                print("  - Use your phone as a hotspot and connect through it")
-            else:
-                print("\n[SUCCESS] Good failure rate! Ready for training!")
-            
-            print("="*70)
-            
-    except KeyboardInterrupt:
-        print(f"\n[STOPPED] Saved {round_counter} rounds")
-        print(f"[FILE] {output_file}")
+        return -100  # No signal
     except Exception as e:
-        print(f"\n[ERROR] {e}")
+        print(f"  [WARN] RSSI read error: {e}")
+        return -100
 
-if __name__ == "__main__":
-    collect_data()
+def ping_target(ip_address, name):
+    """Ping target and return latency in ms"""
+    param = '-n' if platform.system().lower() == 'windows' else '-c'
+    cmd = ['ping', param, '3', ip_address]
+    
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        output = result.stdout
+        
+        # Parse latency
+        if platform.system().lower() == 'windows':
+            match = re.search(r'Average = (\d+)ms', output)
+        else:
+            match = re.search(r'= [\d.]+/([\d.]+)/[\d.]+', output)
+        
+        if match:
+            return float(match.group(1))
+        else:
+            # Check for "Destination unreachable" or "Request timed out"
+            if "unreachable" in output.lower() or "timed out" in output.lower():
+                return 9999
+            return 9999
+    except subprocess.TimeoutExpired:
+        return 9999
+    except Exception:
+        return 9999
+
+def calculate_rolling_features(df, window=5):
+    """Calculate rolling averages and trends"""
+    df['router_ping_rolling5'] = df['router_ping_ms'].rolling(window, min_periods=1).mean()
+    df['dns_ping_rolling5'] = df['dns_ping_ms'].rolling(window, min_periods=1).mean()
+    df['rssi_rolling5'] = df['rssi_dbm'].rolling(window, min_periods=1).mean()
+    
+    # Calculate trends (current - 5 rounds ago)
+    df['router_trend'] = df['router_ping_ms'] - df['router_ping_ms'].shift(window)
+    df['dns_trend'] = df['dns_ping_ms'] - df['dns_ping_ms'].shift(window)
+    df['rssi_trend'] = df['rssi_dbm'] - df['rssi_dbm'].shift(window)
+    
+    # Fill NaN values (first few rows) with 0
+    df['router_trend'] = df['router_trend'].fillna(0)
+    df['dns_trend'] = df['dns_trend'].fillna(0)
+    df['rssi_trend'] = df['rssi_trend'].fillna(0)
+    
+    return df
+
+def add_labels(df, loss_threshold=200):
+    """
+    Add 'minutes_to_failure' labels based on high latency
+    When latency > threshold, countdown begins
+    """
+    df['minutes_to_failure'] = 10  # Default healthy
+    
+    # Find rounds where router or DNS ping is high (failure indicator)
+    high_latency_rounds = df[(df['router_ping_ms'] > loss_threshold) | 
+                              (df['dns_ping_ms'] > loss_threshold)].index
+    
+    for idx in high_latency_rounds:
+        # Look ahead up to 20 rounds
+        lookahead_limit = min(idx + 20, len(df))
+        remaining_minutes = 10
+        for j in range(idx, lookahead_limit):
+            # Linear decay from 10 to 0 minutes over lookahead window
+            remaining_minutes = 10 * (1 - (j - idx) / 20)
+            df.at[j, 'minutes_to_failure'] = max(0, min(10, remaining_minutes))
+    
+    return df
+
+print("\n[STARTING] Data collection...")
+print("Press Ctrl+C to stop early\n")
+
+# Storage for data
+data_rows = []
+round_num = 0
+
+try:
+    start_time = time.time()
+    end_time = start_time + (COLLECTION_MINUTES * 60)
+    
+    while time.time() < end_time:
+        round_num += 1
+        
+        # Calculate elapsed and remaining time
+        elapsed = time.time() - start_time
+        remaining = end_time - time.time()
+        minutes_left = int(remaining // 60)
+        seconds_left = int(remaining % 60)
+        
+        # Collect data
+        router_ping = ping_target(ROUTER_IP, "Router")
+        dns_ping = ping_target(DNS_IP, "DNS")
+        rssi = get_wifi_rssi()
+        
+        # Store
+        data_rows.append({
+            'round_id': round_num,
+            'timestamp': datetime.now().isoformat(),
+            'router_ping_ms': router_ping,
+            'dns_ping_ms': dns_ping,
+            'rssi_dbm': rssi
+        })
+        
+        # Print progress
+        status = "[OK]" if router_ping < 100 and dns_ping < 100 else "[WARN]"
+        print(f"[ROUND {round_num:3d}] {status} Router: {router_ping:4.0f}ms | DNS: {dns_ping:4.0f}ms | RSSI: {rssi:5.1f}dBm | Time left: {minutes_left:2d}:{seconds_left:02d}")
+        
+        # Wait before next round
+        time.sleep(WAIT_SECONDS)
+    
+except KeyboardInterrupt:
+    print("\n\n[STOPPED] Data collection interrupted by user")
+    print(f"[INFO] Saved {round_num} rounds")
+
+finally:
+    if data_rows:
+        # Create DataFrame
+        df = pd.DataFrame(data_rows)
+        
+        # Calculate rolling features
+        df = calculate_rolling_features(df, window=5)
+        
+        # Add labels (minutes to failure)
+        df = add_labels(df, loss_threshold=200)
+        
+        # Save to Excel
+        df.to_excel(output_file, index=False, engine='openpyxl')
+        
+        print("\n" + "="*70)
+        print("DATA COLLECTION COMPLETE")
+        print("="*70)
+        print(f"[STATS] Total rounds collected: {round_num}")
+        print(f"[STATS] Total measurements: {round_num * 3} (ping router, ping dns, rssi)")
+        print(f"[FILE] Saved to: {output_file}")
+        
+        # Show sample
+        print("\n[PREVIEW] First 5 rows:")
+        print(df[['round_id', 'router_ping_ms', 'dns_ping_ms', 'rssi_dbm', 
+                  'router_ping_rolling5', 'minutes_to_failure']].head().to_string())
+        
+        print("\n" + "="*70)
+        print("NEXT STEPS")
+        print("="*70)
+        print("1. Run data collection multiple times with different network conditions")
+        print("2. Then run 03_train_model.py to train your AI")
+        print("="*70)
+    else:
+        print("[ERROR] No data collected!")
